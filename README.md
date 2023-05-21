@@ -10,5 +10,5 @@ cargo build --release
 bash run.sh
 ```
 ### Useful links:
-TCP Options: https://www.firewall.cx/networking-topics/protocols/tcp/138-tcp-options.html
-Wireshark tutorial: https://www.youtube.com/watch?v=OU-A2EmVrKQ&list=PLW8bTPfXNGdC5Co0VnBK1yVzAwSSphzpJ
+* TCP Options: https://www.firewall.cx/networking-topics/protocols/tcp/138-tcp-options.html
+* Wireshark tutorial: https://www.youtube.com/watch?v=OU-A2EmVrKQ&list=PLW8bTPfXNGdC5Co0VnBK1yVzAwSSphzpJ
