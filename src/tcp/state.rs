@@ -1,12 +1,5 @@
 use crate::tcp::{ReceiveSequenceSpace, SendSequenceSpace};
 use etherparse::{Ipv4HeaderSlice, TcpHeaderSlice};
-use crate::tcp::Connection;
-
-pub enum ConnectionWrapper<'a> {
-    Listen(Connection<Listen<'a>>),
-    SynRecv(Connection<SynRecv>),
-    Established(Connection<Established>),
-}
 
 /// The initial listen state for a tcp connection
 pub struct Listen<'a> {
@@ -28,32 +21,32 @@ pub struct Established {
     pub(crate) rcv: ReceiveSequenceSpace,
 }
 
-
 #[cfg(test)]
 mod tests {
-    use crate::tcp::{ReceiveSequenceSpace, SendSequenceSpace};
     use crate::tcp::state::{Established, SynRecv};
+    use crate::tcp::{ReceiveSequenceSpace, SendSequenceSpace};
 
     #[test]
     fn test_transmute() {
-        let sr = SynRecv { snd: SendSequenceSpace {
-            up: true,
-            wnd: 10,
-            una: 20,
-            nxt: 30,
-            wl1: 40,
-            wl2: 50,
-            iss: 60
-        }, rcv: ReceiveSequenceSpace {
-            up: true,
-            wnd: 70,
-            nxt: 80,
-            irs: 90
-        } };
-
-        let tr = unsafe {
-            std::mem::transmute::<SynRecv, Established>(sr)
+        let sr = SynRecv {
+            snd: SendSequenceSpace {
+                up: true,
+                wnd: 10,
+                una: 20,
+                nxt: 30,
+                wl1: 40,
+                wl2: 50,
+                iss: 60,
+            },
+            rcv: ReceiveSequenceSpace {
+                up: true,
+                wnd: 70,
+                nxt: 80,
+                irs: 90,
+            },
         };
+
+        let tr = unsafe { std::mem::transmute::<SynRecv, Established>(sr) };
 
         assert_eq!(tr.snd.up, true);
         assert_eq!(tr.snd.wnd, 10);

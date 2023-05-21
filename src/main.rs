@@ -1,13 +1,11 @@
 mod tcp;
 
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
-use tcp::Connection;
-use crate::tcp::{ConnectionID, parse_connection_id};
+use crate::tcp::state::{Established, SynRecv};
+use crate::tcp::{parse_connection_id, ConnectionID};
 use anyhow::Result;
-use etherparse::Ipv4HeaderSlice;
-use etherparse::TcpHeaderSlice;
-use crate::tcp::state::ConnectionWrapper;
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+use tcp::Connection;
 
 /// Refer to: https://en.wikipedia.org/wiki/List_of_IP_protocol_numbers
 const TCP_PROTOCOL: u8 = 6;
@@ -31,17 +29,24 @@ fn main() -> Result<()> {
             }
         };
 
+        log::debug!("received {nbytes:} bytes from id: {id:?}");
+
         match connections.entry(id.clone()) {
             Entry::Vacant(e) => {
+                // there are attacks called SYN flood, modern kernel actually protects against this
+                // attack, but we don't really care about this here.
                 let handshake = Connection::new(id, ip_header, tcp_header);
                 let next = handshake.syn_ack(&nic)?;
                 e.insert(ConnectionWrapper::SynRecv(next));
-            },
+            }
             Entry::Occupied(e) => {
                 log::debug!("connection: {id:?} already exists");
                 log::info!(
                     "received tcp header, ack: {:}, seq: {:}, syn: {:}",
-                    tcp_header.ack(), tcp_header.sequence_number(), tcp_header.syn());
+                    tcp_header.ack(),
+                    tcp_header.sequence_number(),
+                    tcp_header.syn()
+                );
                 match e.remove() {
                     ConnectionWrapper::SynRecv(conn) => match conn.check_ack(&nic, &tcp_header) {
                         Ok(conn) => {
@@ -59,4 +64,9 @@ fn main() -> Result<()> {
             }
         }
     }
+}
+
+enum ConnectionWrapper {
+    SynRecv(Connection<SynRecv>),
+    Established(Connection<Established>),
 }

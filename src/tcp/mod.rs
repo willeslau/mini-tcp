@@ -1,10 +1,8 @@
-use std::fs::read;
-use std::net::Ipv4Addr;
+use crate::{ETH_HEADER_OFFSET, TCP_PROTOCOL};
 use anyhow::anyhow;
 use anyhow::Result;
-use etherparse::{Ipv4Header, Ipv4HeaderSlice, TcpHeader, TcpHeaderSlice};
-use crate::{ETH_HEADER_OFFSET, TCP_PROTOCOL};
-use crate::tcp::state::{Listen, SynRecv};
+use etherparse::{Ipv4HeaderSlice, TcpHeaderSlice};
+use std::net::Ipv4Addr;
 
 pub mod handshake;
 pub mod state;
@@ -121,7 +119,11 @@ impl<T> Connection<T> {
 /// or
 ///     RCV.NXT =< SEG.SEQ+SEG.LEN-1 < RCV.NXT+RCV.WND
 /// Note that the above is a *OR* condition.
-pub(crate) fn is_recv_data_in_window(rcv: &ReceiveSequenceSpace, seg: &TcpHeaderSlice, data: Option<&[u8]>) -> bool {
+pub(crate) fn is_recv_data_in_window(
+    rcv: &ReceiveSequenceSpace,
+    seg: &TcpHeaderSlice,
+    data: Option<&[u8]>,
+) -> bool {
     // Case 1:
     if data.is_none() && rcv.wnd == 0 && seg.sequence_number() == rcv.nxt {
         return true;

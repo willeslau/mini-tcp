@@ -14,10 +14,13 @@
 //!   Other payload sent...
 
 use crate::tcp::state::{Established, Listen, SynRecv};
-use crate::tcp::{DEFAULT_WINDOW_SIZE, is_recv_data_in_window, is_ack_in_window, ReceiveSequenceSpace, SendSequenceSpace};
-use crate::{Connection, ConnectionID, ETH_HEADER_OFFSET, TCP_PROTOCOL};
+use crate::tcp::{
+    is_ack_in_window, is_recv_data_in_window, ReceiveSequenceSpace, SendSequenceSpace,
+    DEFAULT_WINDOW_SIZE,
+};
+use crate::{Connection, ConnectionID, TCP_PROTOCOL};
 use anyhow::{anyhow, Result};
-use etherparse::{Ipv4Header, Ipv4HeaderSlice, TcpHeader, TcpHeaderSlice, TcpOptionElement};
+use etherparse::{Ipv4Header, Ipv4HeaderSlice, TcpHeader, TcpHeaderSlice};
 
 /// Implements the initial SYN response handling
 ///        TCP A                                                TCP B
@@ -28,8 +31,18 @@ use etherparse::{Ipv4Header, Ipv4HeaderSlice, TcpHeader, TcpHeaderSlice, TcpOpti
 ///
 ///   3.  ESTABLISHED <-- <SEQ=300><ACK=101><CTL=SYN,ACK>  <-- SYN-RECEIVED
 impl<'a> Connection<Listen<'a>> {
-    pub fn new(id: ConnectionID, ip_header: Ipv4HeaderSlice<'a>, tcp_header: TcpHeaderSlice<'a>) -> Self {
-        Self::from(id, Listen { ip_header, tcp_header })
+    pub fn new(
+        id: ConnectionID,
+        ip_header: Ipv4HeaderSlice<'a>,
+        tcp_header: TcpHeaderSlice<'a>,
+    ) -> Self {
+        Self::from(
+            id,
+            Listen {
+                ip_header,
+                tcp_header,
+            },
+        )
     }
 
     /// Generates the next to be used by subsequent steps. See https://www.ietf.org/rfc/rfc793.txt page 64
@@ -59,7 +72,7 @@ impl<'a> Connection<Listen<'a>> {
 
     /// Performs checks on establish a connection, refer to https://www.ietf.org/rfc/rfc793.txt page 64
     /// for the full pseudocode.
-    fn preflight_checks(&self, _nic: &tun_tap::Iface) -> Result<()> {
+    fn preflight_checks(&self) -> Result<()> {
         if self.state.tcp_header.ack() {
             // Any acknowledgment is bad if it arrives on a connection still in
             // the LISTEN state.  An acceptable reset segment should be formed
@@ -86,7 +99,7 @@ impl<'a> Connection<Listen<'a>> {
     }
 
     pub fn syn_ack(self, nic: &tun_tap::Iface) -> Result<Connection<SynRecv>> {
-        let _ = self.preflight_checks(nic)?;
+        self.preflight_checks()?;
 
         // TODO: replace seq_number with random
         let initial_seq_num = 0;
@@ -95,13 +108,18 @@ impl<'a> Connection<Listen<'a>> {
 
         // ISS should be selected and a SYN segment sent of the form:
         //     <SEQ=ISS><ACK=RCV.NXT><CTL=SYN,ACK>
-        let mut reply_tcp_header =
-            TcpHeader::new(self.id.dst_port, self.id.src_port, initial_seq_num, window_size);
+        let mut reply_tcp_header = TcpHeader::new(
+            self.id.dst_port,
+            self.id.src_port,
+            initial_seq_num,
+            window_size,
+        );
         reply_tcp_header.acknowledgment_number = next_state.rcv.nxt;
         reply_tcp_header.syn = true;
         reply_tcp_header.ack = true;
         // this field is needed, if no checksum, the other host will not respond with ACK.
-        reply_tcp_header.checksum = reply_tcp_header.calc_checksum_ipv4(&self.state.ip_header.to_header(), &[])?;
+        reply_tcp_header.checksum =
+            reply_tcp_header.calc_checksum_ipv4(&self.state.ip_header.to_header(), &[])?;
 
         let reply_ip_header = Ipv4Header::new(
             reply_tcp_header.header_len(),
@@ -118,7 +136,7 @@ impl<'a> Connection<Listen<'a>> {
 
         nic.send(&response)?;
 
-        let Connection { id, ..} = self;
+        let Connection { id, .. } = self;
         Ok(Connection::from(id, next_state))
     }
 }
@@ -126,7 +144,11 @@ impl<'a> Connection<Listen<'a>> {
 /// Implements the reciving of ACK after Syn Recv
 ///   4.  ESTABLISHED --> <SEQ=101><ACK=301><CTL=ACK>       --> ESTABLISHED
 impl Connection<SynRecv> {
-    pub fn check_ack(self, nic: &tun_tap::Iface, tcp_header: &TcpHeaderSlice) -> Result<Connection<Established>> {
+    pub fn check_ack(
+        self,
+        _nic: &tun_tap::Iface,
+        tcp_header: &TcpHeaderSlice,
+    ) -> Result<Connection<Established>> {
         if !tcp_header.ack() {
             return Err(anyhow!("no ack received"));
         }
